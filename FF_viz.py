@@ -1,8 +1,15 @@
+"""
+This uses an API for ESPN fantasy football to
+format data to put into the web service Flourish
+
+Final product is here: https://public.flourish.studio/visualisation/985627/
+"""
+
 import pandas as pd
 from ff_espn_api import League
 from config import USERNAME, PASSWORD
 
-# initializing settings
+# Initializing settings
 weeks_completed = 11
 year = 2019
 league_id = 291048
