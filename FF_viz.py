@@ -13,28 +13,63 @@ from config import USERNAME, PASSWORD
 weeks_completed = 11
 year = 2019
 league_id = 291048
+# Have this week's scores been uploaded to team.scores?
+uploaded = False
 
 # Connecting to league
 league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
 
-# Creating scores dict
+# Names dict translates between ESPN owners and names displayed
+names = {
+    'Trevor Baker':'Trevor',
+    'Andrew Knauer':'Knauer',
+    'Nick Pawker':'Nick',
+    'Todd Matsuura':'Todd',
+    'mark petrusich':'Mark',
+    'Jeff Garavaglia':'Jeff',
+    'Derek Tsukahira':'Derek',
+    'Andrew Badroos':'Bad',
+    'Scott Huston':'Scott',
+    'chris grove':'Grove',
+    'Pick Narker':'Matt',
+    'Holden Tikkanen':'Holden'
+    }
+
+# Initializing scores dict
 scores = {}
 
 for team in league.teams:
     team_name = team.team_name
     logo = team.logo_url
     week_0 = 0
-    scores[team.owner] = [team_name, logo, week_0]
+    name = names.get(team.owner)
+    scores[name] = [team_name, logo, week_0]
 
-# Iterating through teams and weeks
+# Function takes previous total and adds
+# entry for previous total + weekly score
+def append_score(name, score):
+    current_total = scores[name][-1]
+    new_total = current_total+score
+    scores[name].append(new_total)
+
+# Iterating through teams and weeks, appending
+# weekly total points scored
 for team in league.teams:
     for week in range(weeks_completed):
-        # Get most recent score, 
-        # add weekly score, and append    
-        current_total = scores[team.owner][-1]
+        name = names.get(team.owner)    
         week_score = team.scores[week]
-        new_total = current_total + week_score
-        scores[team.owner].append(new_total)
+        append_score(name, week_score)
+
+# Getting this week's scores if week hasn't ended
+if uploaded == False:
+    for score in league.box_scores():
+        home_name = names.get(score.home_team.owner)
+        away_name = names.get(score.away_team.owner)
+        home_score = score.home_score
+        away_score = score.away_score
+
+        append_score(home_name, home_score)
+        append_score(away_name, away_score)
 
 # Converting dict to pandas
 df = pd.DataFrame(scores)
@@ -46,11 +81,11 @@ for week in range(weeks_completed+1):
     week = week
     column_names.append('Week {}'.format(week))
 
+if uploaded == False:
+    column_names.append('Week {}'.format(weeks_completed+1))
+
 df.columns = column_names
 df.index.name = 'Owner'
-
-# # Dropping placeholder column
-# df.drop(['Placeholder'], axis = 'columns', inplace = True)
 
 # Saving to csv
 path = 'FF_{}_week_{}.csv'.format(year, weeks_completed)
