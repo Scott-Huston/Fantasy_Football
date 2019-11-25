@@ -1,5 +1,6 @@
 import pandas as pd
 from ff_espn_api import League
+from config import USERNAME, PASSWORD
 
 # initializing settings
 weeks_completed = 11
@@ -16,7 +17,7 @@ for team in league.teams:
     team_name = team.team_name
     logo = team.logo_url
     week_0 = 0
-    scores[team.owner] = [team_name, logo, placeholder]
+    scores[team.owner] = [team_name, logo, week_0]
 
 # Iterating through teams and weeks
 for team in league.teams:
