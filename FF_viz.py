@@ -60,7 +60,7 @@ for team in league.teams:
         week_score = team.scores[week]
         append_score(name, week_score)
 
-# Getting this week's scores if week hasn't ended
+# Adding this week's scores if week hasn't ended
 if uploaded == False:
     for score in league.box_scores():
         home_name = names.get(score.home_team.owner)
