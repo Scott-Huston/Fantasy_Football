@@ -5,12 +5,14 @@ format data to put into the web service Flourish
 Final product is here: https://public.flourish.studio/visualisation/985627/
 """
 
+# TODO fix playoff score tracking
+
 import pandas as pd
 from ff_espn_api import League
 from config import USERNAME, PASSWORD
 
 # Initializing settings
-weeks_completed = 11
+
 year = 2019
 league_id = 291048
 # Have this week's scores been uploaded to team.scores?
@@ -18,6 +20,7 @@ uploaded = False
 
 # Connecting to league
 league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
+weeks_completed = league.nfl_week
 
 # Names dict translates between ESPN owners and names displayed
 names = {
