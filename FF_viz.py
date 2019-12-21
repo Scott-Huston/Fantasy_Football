@@ -15,8 +15,6 @@ from config import USERNAME, PASSWORD
 
 year = 2019
 league_id = 291048
-# # Have this week's scores been uploaded to team.scores?
-# uploaded = False
 
 # Connecting to league
 league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
@@ -55,14 +53,6 @@ def append_score(name, score):
     new_total = current_total+score
     scores[name].append(new_total)
 
-# # Iterating through teams and weeks, appending
-# # weekly total points scored
-# for team in league.teams:
-#     for week in range(weeks_completed):
-#         name = names.get(team.owner)    
-#         week_score = team.scores[week]
-#         append_score(name, week_score)
-
 # Adding this week's scores if week hasn't ended
 for week in range(1, weeks_completed):
     for score in league.box_scores(week):
@@ -86,9 +76,6 @@ column_names = ['Team Name', 'Logo']
 for week in range(weeks_completed):
     week = week
     column_names.append('Week {}'.format(week))
-
-# if uploaded == False:
-#     column_names.append('Week {}'.format(weeks_completed+1))
 
 df.columns = column_names
 df.index.name = 'Owner'
