@@ -5,8 +5,6 @@ format data to put into the web service Flourish
 Final product is here: https://public.flourish.studio/visualisation/985627/
 """
 
-# TODO fix playoff score tracking
-
 import pandas as pd
 from ff_espn_api import League
 from config import USERNAME, PASSWORD
