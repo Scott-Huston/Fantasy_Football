@@ -10,7 +10,6 @@ from ff_espn_api import League
 from config import USERNAME, PASSWORD
 
 # Initializing settings
-
 year = 2019
 league_id = 291048
 
