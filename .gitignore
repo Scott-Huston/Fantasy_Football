@@ -90,6 +90,8 @@ ENV/
 env.bak/
 venv.bak/
 config.py
+names.py
+Projected_keepers_2020.xlsx
 
 # Spyder project settings
 .spyderproject
