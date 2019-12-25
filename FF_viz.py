@@ -8,6 +8,7 @@ Final product is here: https://public.flourish.studio/visualisation/985627/
 import pandas as pd
 from ff_espn_api import League
 from config import USERNAME, PASSWORD
+from names import names # dictionary to convert ESPN owner names to displayed names
 
 # Initializing settings
 year = 2019
@@ -16,22 +17,6 @@ league_id = 291048
 # Connecting to league
 league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
 weeks_completed = league.nfl_week
-
-# Names dict translates between ESPN owners and names displayed
-names = {
-    'Trevor Baker':'Trevor',
-    'Andrew Knauer':'Knauer',
-    'Nick Pawker':'Nick',
-    'Todd Matsuura':'Todd',
-    'mark petrusich':'Mark',
-    'Jeff Garavaglia':'Jeff',
-    'Derek Tsukahira':'Derek',
-    'Andrew Badroos':'Bad',
-    'Scott Huston':'Scott',
-    'chris grove':'Grove',
-    'Pick Narker':'Matt',
-    'Holden Tikkanen':'Holden'
-    }
 
 # Initializing scores dict
 scores = {}
@@ -51,7 +36,7 @@ def append_score(name, score):
     scores[name].append(new_total)
 
 # Adding this week's scores if week hasn't ended
-for week in range(1, weeks_completed):
+for week in range(1, weeks_completed+1):
     for score in league.box_scores(week):
         home_name = names.get(score.home_team.owner)
         home_score = score.home_score
@@ -70,7 +55,7 @@ df = df.T
 
 # Renaming columns
 column_names = ['Team Name', 'Logo']
-for week in range(weeks_completed):
+for week in range(weeks_completed+1):
     week = week
     column_names.append('Week {}'.format(week))
 
