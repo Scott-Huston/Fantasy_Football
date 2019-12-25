@@ -4,7 +4,7 @@ from ff_espn_api import League
 from config import USERNAME, PASSWORD
 import seaborn as sns
 from scipy.optimize import curve_fit
-
+from names import names
 
 # initializing settings
 year = 2019
@@ -20,20 +20,22 @@ players = {}
 pick = 1
 for player in league.draft:
     name = player.playerName
-    players[name] = [pick, 'POSITION_PLACEHOLDER']
+    owner = names[player.team.owner]
+    keeper = player.keeper_status
+    players[name] = [pick, owner, keeper, 'POSITION_PLACEHOLDER']
     pick += 1
 
 def update_players(player, week):
     if player.name not in players.keys():
-        players[player.name] = [np.NaN]*(4*(week-1)+2)
+        players[player.name] = [np.NaN]*(4*(week-1)+4)
         players[player.name][0] = np.NaN
-        players[player.name][1] = player.position
+        players[player.name][3] = player.position
 
     players[player.name].extend([
         player.points, player.pro_pos_rank, \
         player.projected_points, player.slot_position
         ])
-    players[player.name][1] = player.position
+    players[player.name][3] = player.position
 
 
 # iterating through weeks, matchups, and players to 
@@ -50,7 +52,7 @@ for week in range(1, weeks_completed):
         if len(players[player]) < (week*4+2):
             players[player].extend([np.NaN]*4)
         
-        assert len(players[player]) == (week*4+2), \
+        assert len(players[player]) == (week*4+4), \
             "Player, {} doesn't match after week {}".format(player, week)
     
 
@@ -59,7 +61,7 @@ players = pd.DataFrame(players)
 players = players.T
 
 # naming columns and getting lists 
-column_names = ['Pick', 'Position']
+column_names = ['Pick', 'Owner', 'Keeper', 'Position']
 
 points_list = []
 proj_pos_rank_list = []
@@ -109,9 +111,14 @@ def get_replacement_levels():
 
     for week in range(1, weeks_completed):
         for position in replacement_ranks.keys():
-            position_players = players[players['Position']==position].sort_values(by=['Week_{}_proj_points'.format(week)], ascending=False)
+            position_players = players[players['Position']==position]
+            position_players = position_players.sort_values( \
+                                    by=['Week_{}_proj_points'.format(week)], \
+                                    ascending=False)
 
             # get the replacement rank (ie, 12 for QBs, 30 for RBs)
+            # Note: because dataframes are zero-indexed, the code sets the 
+            # rank+1 best projected player as replacement level
             replacement_rank = replacement_ranks[position]
 
             baseline_player = position_players.iloc[replacement_rank]
@@ -125,6 +132,7 @@ def get_replacement_levels():
                 while proj_points == 0:
                     proj_points = position_players['Week_{}_proj_points'.format(week)].dropna()[-count]
                     count+=1
+
             replacement_levels[position].append(proj_points)
     
     return replacement_levels
@@ -135,6 +143,8 @@ def get_PAR(points, week, position):
     return PAR
 
 def get_ADJ_PAR(points, week, position, projection):
+    # TODO, make a range with probabilities of starting based
+    # on position rank instead of hard cutoff
     replacement_level = replacement_levels[position][week-1]
 
     # Not penalizing players for being bad/injured when we 
@@ -165,33 +175,57 @@ for week in range(1, weeks_completed):
 players['PAR_total'] = players[PAR_cols].sum(axis=1)
 players['ADJ_PAR_total'] = players[ADJ_PAR_cols].sum(axis=1)
 
-# slicing off the first 2 rounds because keepers make it different
-non_keepers = players[players.Pick > 24]
+# getting df with only drafted players
+draft = players.dropna(subset=['Pick'])
 
+# reading in pre-draft expert consensus draft rankings
+# assuming
+ecr = pd.read_csv('Beersheets_ECR.csv')
+
+# slicing off the first 2 rounds because keepers mean draft order isn't accurate
+no_keeper_rounds = draft[draft.Pick > 24]
 
 # graphing total points and pick number
-sns.relplot(x = 'Pick', y = 'Total', data=non_keepers)
-sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=players)
+# sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=no_keeper_rounds)
+# sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=players)
 
+# Getting regression curve to estimate ADJ_PAR_total by pick position
 
-# Unfinished code to get regression curve for pick value
+def exp_decay(x, a, r, c):
+    return a*np.power(1-r, x)+c
 
-def func(x, a, b, c):
-    return a*np.exp(-b*x) + c
-
-def pick_value(x, a, b):
-    return a/(x*b)
-
-popt, pcov = curve_fit(pick_value, players.Pick, players.ADJ_PAR_total)
+# fitting curve to the data
+guess = [10, .05, 0] # initial parameters for curve_fit
+popt, pcov = curve_fit(exp_decay, no_keeper_rounds.Pick, no_keeper_rounds.ADJ_PAR_total, p0=guess)
 
 # curve params
-p1 = popt[0]
-p2 = popt[1]
+a = popt[0]
+r = popt[1]
+c = popt[2]
+
+# returns estimated ADJ_PAR for a given overall pick number
+def pick_value(pick):
+    return a*np.power(1-r, pick)+c
 
 # plot curve
-curvex=np.linspace(15,190,1000)
-curvey=pick_value(curvex,p1,p2)
-plt.plot(curvex,curvey,'r', linewidth=5)
+curve_x=np.linspace(25,190,1000)
+curve_y=pick_value(curve_x)
+
+sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=players)
+plt.plot(curve_x,curve_y,'r', linewidth=5)
+plt.plot()
+
+# calculating player value compared to where they were drafted
+draft['Pick_value'] = draft.Pick.apply(pick_value)
+draft['ADJ_PAR_over_pick_pos'] = draft.ADJ_PAR_total - draft.Pick_value
+
+# TODO add total points
+best_picks = draft.sort_values(by='ADJ_PAR_over_pick_pos', ascending=False).head(10)
+best_picks = best_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_total']+points_list]
+
+worst_picks = draft.sort_values(by='ADJ_PAR_over_pick_pos').head(10)
+worst_picks = worst_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_total']+points_list]
+
 
 # future TODO:
 #   get data from prior years
