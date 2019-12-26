@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 from ff_espn_api import League
-from config import USERNAME, PASSWORD
 import seaborn as sns
+import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+from config import USERNAME, PASSWORD
 from names import names
 
 # initializing settings
@@ -124,9 +125,9 @@ def get_replacement_levels():
             baseline_player = position_players.iloc[replacement_rank]
             proj_points = baseline_player['Week_{}_proj_points'.format(week)]
 
-            # if proj points is null for nth best projection, just take the lowest projected value that isn't 0 
+            # if proj points is null or 0 for nth best projection, just take the lowest projected value that isn't 0 
             # this really only effects kickers
-            if pd.isna(proj_points):
+            if pd.isna(proj_points) or proj_points==0:
                 proj_points = 0
                 count = 1
                 while proj_points == 0:
@@ -143,17 +144,37 @@ def get_PAR(points, week, position):
     return PAR
 
 def get_ADJ_PAR(points, week, position, projection):
-    # TODO, make a range with probabilities of starting based
-    # on position rank instead of hard cutoff
+    """
+    Not penalizing players for being bad/injured when we 
+    know they're going to be bad/injured
+
+    That shouldn't count as below replacement level because we know
+    to replace them
+    """
+
     replacement_level = replacement_levels[position][week-1]
 
-    # Not penalizing players for being bad/injured when we 
-    # know they're going to be bad/injured
-    if projection < replacement_level:
-        return 0
+    top_replacement = replacement_level*1.1
+    bottom_replacement = replacement_level*.9
+
+    # estimating probability player is started in a lineup
+    # probability linearly increases from 0 at a projection 10% lower than replacement level
+    # to 1 at a projection 10% higher than replacement level
+    start_prob = (1/(top_replacement-bottom_replacement))*(projection-bottom_replacement)
+
+    # if projection is not within +-10% of replacement level, assume they are definitely playing
+    # or definitely not playing
+    if projection < bottom_replacement:
+        start_prob = 0
     
+    if projection > top_replacement:
+        start_prob = 1
+    
+    # getting PAR and adjusting for start probability
     PAR = points - replacement_level
-    return PAR
+    ADJ_PAR = PAR*start_prob
+    
+    return ADJ_PAR
 
 replacement_levels = get_replacement_levels()
 
@@ -178,9 +199,73 @@ players['ADJ_PAR_total'] = players[ADJ_PAR_cols].sum(axis=1)
 # getting df with only drafted players
 draft = players.dropna(subset=['Pick'])
 
-# reading in pre-draft expert consensus draft rankings
+
 # assuming
+# TODO getting adj_pick for where players were projected 
+# to go in the first 2 rounds
+
+
+# getting names of players in first 2 rounds
+first_2_rounds_players = set(players.iloc[:24].index)
+
+# fixing naming issues between ecr list and ESPN data
+rename = {
+    'Todd Gurley II' : 'Todd Gurley',
+    'Le\'Veon Bell' : 'LeVeon Bell',
+    'Odell Beckham Jr.' : 'Odell Beckham'
+}
+
+for key in rename.keys():
+    first_2_rounds_players.remove(key)
+    first_2_rounds_players.add(rename[key])
+
+# reading in pre-draft expert consensus draft rankings
 ecr = pd.read_csv('Beersheets_ECR.csv')
+filtered_ecr = ecr[ecr['NAME'].isin(first_2_rounds_players)]
+assert len(filtered_ecr) == 24, 'filtered_ecr length is not equal to 24'
+
+def get_overall_ECR(ECR):
+    ECR = str(ECR)
+    round, pick_in_round = ECR.split('.')
+    overall = (int(round)-1)*12 + int(pick_in_round)
+    return overall
+
+filtered_ecr['OVR'] = filtered_ecr.ECR.apply(get_overall_ECR)
+
+# ordering by ECR (ascending), then VAL (descending)
+filtered_ecr = filtered_ecr.sort_values(by=['OVR', 'VAL'], ascending=[True, False])
+# reset index
+filtered_ecr.reset_index(drop=True, inplace=True)
+# set name to index
+filtered_ecr.set_index('NAME', inplace=True)
+
+# creating ADJ_Pick column
+def get_adj_pick(player_name):
+    """
+    Since keepers throw off the draft order for the first two rounds,
+    I'm creating an adj_pick column with the order the players taken in
+    the first two rounds were projected to get taken in. Both keeper and
+    non-keeper players are effected because non-keeper picks would likely
+    have been different players if keeper players had been available
+    """
+
+    if player_name in rename.keys():
+        ecr_player_name = rename[player_name]
+    else:
+        ecr_player_name = player_name
+
+
+    pick = draft.loc[player_name].Pick
+
+    # if not in the first two rounds, just return the actual pick number
+    if pick > 24:
+        return pick
+
+    adj_pick = filtered_ecr.loc[ecr_player_name].ADJ_PICK
+    return adj_pick
+
+draft['ADJ_Pick'] = draft.index.map(get_adj_pick)
+
 
 # slicing off the first 2 rounds because keepers mean draft order isn't accurate
 no_keeper_rounds = draft[draft.Pick > 24]
@@ -196,7 +281,7 @@ def exp_decay(x, a, r, c):
 
 # fitting curve to the data
 guess = [10, .05, 0] # initial parameters for curve_fit
-popt, pcov = curve_fit(exp_decay, no_keeper_rounds.Pick, no_keeper_rounds.ADJ_PAR_total, p0=guess)
+popt, pcov = curve_fit(exp_decay, draft.ADJ_Pick, draft.ADJ_PAR_total, p0=guess)
 
 # curve params
 a = popt[0]
@@ -208,23 +293,23 @@ def pick_value(pick):
     return a*np.power(1-r, pick)+c
 
 # plot curve
-curve_x=np.linspace(25,190,1000)
+curve_x=np.linspace(1,190,190)
 curve_y=pick_value(curve_x)
 
-sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=players)
+sns.relplot(x = 'ADJ_Pick', y = 'ADJ_PAR_total', data=draft)
 plt.plot(curve_x,curve_y,'r', linewidth=5)
 plt.plot()
 
-# calculating player value compared to where they were drafted
-draft['Pick_value'] = draft.Pick.apply(pick_value)
+# calculating player value compared to where they were drafted (adjusted for keepers)
+draft['Pick_value'] = draft.ADJ_Pick.apply(pick_value)
 draft['ADJ_PAR_over_pick_pos'] = draft.ADJ_PAR_total - draft.Pick_value
 
 # TODO add total points
 best_picks = draft.sort_values(by='ADJ_PAR_over_pick_pos', ascending=False).head(10)
-best_picks = best_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_total']+points_list]
+best_picks = best_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_over_pick_pos', 'ADJ_PAR_total']+points_list]
 
 worst_picks = draft.sort_values(by='ADJ_PAR_over_pick_pos').head(10)
-worst_picks = worst_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_total']+points_list]
+worst_picks = worst_picks[['Pick', 'Owner', 'Position','ADJ_PAR_over_pick_pos', 'ADJ_PAR_total']+points_list]
 
 
 # future TODO:
