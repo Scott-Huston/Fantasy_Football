@@ -199,16 +199,14 @@ players['ADJ_PAR_total'] = players[ADJ_PAR_cols].sum(axis=1)
 # getting df with only drafted players
 draft = players.dropna(subset=['Pick'])
 
-
-# assuming
-# TODO getting adj_pick for where players were projected 
-# to go in the first 2 rounds
-
+######################################################
+# Getting adjusted pick numbers for first two rounds #
+######################################################
 
 # getting names of players in first 2 rounds
 first_2_rounds_players = set(players.iloc[:24].index)
 
-# fixing naming issues between ecr list and ESPN data
+# dict for fixing naming issues between ecr list and ESPN data
 rename = {
     'Todd Gurley II' : 'Todd Gurley',
     'Le\'Veon Bell' : 'LeVeon Bell',
@@ -221,10 +219,13 @@ for key in rename.keys():
 
 # reading in pre-draft expert consensus draft rankings
 ecr = pd.read_csv('Beersheets_ECR.csv')
+
+# filtering to only players taken in first 2 rounds
 filtered_ecr = ecr[ecr['NAME'].isin(first_2_rounds_players)]
 assert len(filtered_ecr) == 24, 'filtered_ecr length is not equal to 24'
 
 def get_overall_ECR(ECR):
+    # returns overall pick number implied by ECR
     ECR = str(ECR)
     round, pick_in_round = ECR.split('.')
     overall = (int(round)-1)*12 + int(pick_in_round)
@@ -236,6 +237,8 @@ filtered_ecr['OVR'] = filtered_ecr.ECR.apply(get_overall_ECR)
 filtered_ecr = filtered_ecr.sort_values(by=['OVR', 'VAL'], ascending=[True, False])
 # reset index
 filtered_ecr.reset_index(drop=True, inplace=True)
+# getting ADJ_Pick values
+filtered_ecr['ADJ_PICK'] = filtered_ecr.index+1
 # set name to index
 filtered_ecr.set_index('NAME', inplace=True)
 
@@ -249,11 +252,12 @@ def get_adj_pick(player_name):
     have been different players if keeper players had been available
     """
 
+    # renames certain players to fix naming discrepancies
+    # between datasources
     if player_name in rename.keys():
         ecr_player_name = rename[player_name]
     else:
         ecr_player_name = player_name
-
 
     pick = draft.loc[player_name].Pick
 
@@ -266,15 +270,9 @@ def get_adj_pick(player_name):
 
 draft['ADJ_Pick'] = draft.index.map(get_adj_pick)
 
-
-# slicing off the first 2 rounds because keepers mean draft order isn't accurate
-no_keeper_rounds = draft[draft.Pick > 24]
-
-# graphing total points and pick number
-# sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=no_keeper_rounds)
-# sns.relplot(x = 'Pick', y = 'ADJ_PAR_total', data=players)
-
-# Getting regression curve to estimate ADJ_PAR_total by pick position
+#######################################################################
+# Getting regression curve to estimate ADJ_PAR_total by pick position #
+#######################################################################
 
 def exp_decay(x, a, r, c):
     return a*np.power(1-r, x)+c
@@ -292,13 +290,14 @@ c = popt[2]
 def pick_value(pick):
     return a*np.power(1-r, pick)+c
 
-# plot curve
-curve_x=np.linspace(1,190,190)
-curve_y=pick_value(curve_x)
+# creates scatterplot with picks and best fit curve
+def plot_pick_values():
+    curve_x=np.linspace(1,190,190)
+    curve_y=pick_value(curve_x)
 
-sns.relplot(x = 'ADJ_Pick', y = 'ADJ_PAR_total', data=draft)
-plt.plot(curve_x,curve_y,'r', linewidth=5)
-plt.plot()
+    sns.relplot(x = 'ADJ_Pick', y = 'ADJ_PAR_total', data=draft)
+    plt.plot(curve_x,curve_y,'r', linewidth=5)
+    plt.plot()
 
 # calculating player value compared to where they were drafted (adjusted for keepers)
 draft['Pick_value'] = draft.ADJ_Pick.apply(pick_value)
@@ -318,22 +317,4 @@ worst_picks = worst_picks[['Pick', 'Owner', 'Position','ADJ_PAR_over_pick_pos', 
 #       might need to pull weekly player stats from another source
 #   get better projections
 #   WR/RB replacement level incorporating flex realities (not assuming 50% flex for each)
-
-
-# messing with using API without the wrapper
-week = 1
-params ={
-'scoringPeriodId': week
-}
-cookies = league.cookies
-
-import requests
-year = 2017
-url = "https://fantasy.espn.com/apis/v3/games/ffl/leagueHistory/" + \
-      str(league_id) + "?seasonId=" + str(year)
-
-r = requests.get(url, params=params, cookies=cookies)
-d = r.json()[0]
-
-
 
