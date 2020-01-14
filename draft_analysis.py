@@ -18,6 +18,11 @@ weeks_completed = league.nfl_week
 # initializing players dict
 players = {}
 
+##########################################
+######### Loading data from ESPN #########
+##########################################
+
+# adding all drafted players to players dict
 pick = 1
 for player in league.draft:
     name = player.playerName
@@ -55,7 +60,11 @@ for week in range(1, weeks_completed):
         
         assert len(players[player]) == (week*4+4), \
             "Player, {} doesn't match after week {}".format(player, week)
-    
+
+
+##########################
+### Cleaning dataframe ###
+##########################
 
 # converting to pandas DataFrame
 players = pd.DataFrame(players)
@@ -90,6 +99,9 @@ players.loc[['Adam Humphries'], ['Position']] = 'WR'
 # summing total points
 players['Total'] = players[points_list].sum(axis=1)
 
+##############################
+##### Evaluating Players #####
+##############################
 
 def get_replacement_levels():
     replacement_ranks = {
@@ -199,9 +211,9 @@ players['ADJ_PAR_total'] = players[ADJ_PAR_cols].sum(axis=1)
 # getting df with only drafted players
 draft = players.dropna(subset=['Pick'])
 
-######################################################
-# Getting adjusted pick numbers for first two rounds #
-######################################################
+############################################################
+#### Getting adjusted pick numbers for first two rounds ####
+############################################################
 
 # getting names of players in first 2 rounds
 first_2_rounds_players = set(players.iloc[:24].index)
@@ -310,11 +322,10 @@ best_picks = best_picks[['Pick', 'Owner', 'Position', 'ADJ_PAR_over_pick_pos', '
 worst_picks = draft.sort_values(by='ADJ_PAR_over_pick_pos').head(10)
 worst_picks = worst_picks[['Pick', 'Owner', 'Position','ADJ_PAR_over_pick_pos', 'ADJ_PAR_total']+points_list]
 
-
 # future TODO:
 #   get data from prior years
 #       I have the draft picks
 #       might need to pull weekly player stats from another source
 #   get better projections
 #   WR/RB replacement level incorporating flex realities (not assuming 50% flex for each)
-
+#   break apart code to pull espn info and just read from df
