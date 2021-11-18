@@ -6,16 +6,18 @@ Final product is here: https://public.flourish.studio/visualisation/985627/
 """
 
 import pandas as pd
-from ff_espn_api import League
-from config import USERNAME, PASSWORD
+from espn_api.football import League
+from config import SWID, ESPN_S2
 from names import names # dictionary to convert ESPN owner names to displayed names
 
 # Initializing settings
-year = 2019
-league_id = 291048
+YEAR = 2021
+LEAGUE_ID = 291048
 
-# Connecting to league
-league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
+# # Connecting to league
+# league = League(league_id=league_id, year=year, username=USERNAME, password=PASSWORD)
+league = League(swid=SWID, espn_s2=ESPN_S2, year=YEAR, league_id=LEAGUE_ID)
+
 weeks_completed = league.nfl_week
 
 # Initializing scores dict
@@ -63,20 +65,5 @@ df.columns = column_names
 df.index.name = 'Owner'
 
 # Saving to csv
-path = 'FF_{}_week_{}.csv'.format(year, weeks_completed)
+path = 'FF_{}_week_{}.csv'.format(YEAR, weeks_completed)
 df.to_csv(path)
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-    
