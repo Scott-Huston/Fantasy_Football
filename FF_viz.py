@@ -37,8 +37,6 @@ def append_score(name, score):
     new_total = current_total+score
     scores[name].append(new_total)
 
-# Test change
-
 # Adding this week's scores if week hasn't ended
 for week in range(1, weeks_completed+1):
     for score in league.box_scores(week):
